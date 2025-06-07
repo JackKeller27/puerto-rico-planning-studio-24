@@ -1,0 +1,122 @@
+---
+title: "Construction Industry in Puerto Rico - Data Summaries"
+author: "Jack Keller (PR Studio 2024, Group 3)"
+date: "2024-02-12"
+output: html_document
+---
+
+### Overview
+This document includes summaries and plots of the **Selected Statistics of the Construction Industry in Puerto Rico** dataset, provided by the *Junta de Planificación de Puerto Rico (Planning Board of Puerto Rico)*. \n
+
+The data is from 2022.
+
+## Value of Construction Activity (Fiscal Semester) 
+### Setup
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(ggplot2)
+library(conflicted)
+# resolve conflicts with base R packages
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+
+# import data
+# Value of Construction Activity (Fiscal Semesters)
+cvfs <- read_excel("../Datasets/Junta de Planificacion/Tablas-de-las-Estadisticas-Seleccionadas-en-la-Industria-de-la-Construccion-2022.xlsx", sheet="T-2")
+#View(cvfs)
+```
+
+### Cleaning
+```{r cleaning, include=TRUE}
+# remove fully NA columns
+cvfs <- select(cvfs, c(-1, -17:-21))
+
+# transpose data
+cvfs <- t(cvfs)
+
+# convert cvfs matrix to tibble
+cvfs <- cvfs %>%
+  as_tibble()
+
+# fix column names
+colnames(cvfs)<- cvfs[16,]
+cvfs <- cvfs[-16,]
+
+# remove any columns with NA values
+cvfs <- cvfs[, colSums(is.na(cvfs))==0]
+
+# rename first column
+colnames(cvfs)[1] <- 'fiscal_sem'
+
+# split table in two, then join back together later
+temp <- cvfs[, 38:ncol(cvfs)]
+colnames(temp)[1] <- 'fiscal_sem' # set first column to same name as cvfs
+cvfs <- cvfs[, 1:37]
+
+# remove public data from cvfs, temp
+cvfs <- cvfs[, 1:21]
+temp <- temp[, 1:21]
+
+# rename "Paid Claims" columns to match
+colnames(cvfs)[ncol(cvfs)-2] <- 'paid_claims'
+colnames(temp)[ncol(temp)-2] <- 'paid_claims'
+
+# now, binding will work correctly since all column names match
+
+# combine tibbles back together (all fiscal semesters will be organized in the first column now)
+cvfs <- bind_rows(cvfs, temp)
+rm(temp)
+
+# rename all columns to be lowercase (snake_case)
+colnames(cvfs) <- c('fiscal_sem', 'total', 'private', 'housing', 'urbanization', 'rural_proj', 'proj_under_500k', 'apt_building', 'commercial_and_industrial_building', 'hotel', 'hotel_villa', 'commercial', 'industrial', 'installation_proj', 'pharma', 'telecomm', 'gas_station', 'renewable_nergy', 'paid_laims', 'property_insurance_housing', 'property_insurance_commercial')
+
+# convert all columns except first to numeric type
+cvfs[,2:ncol(cvfs)] <- cvfs[,2:ncol(cvfs)] %>% mutate_if(is.character, as.numeric)
+
+# dataset is cleaned
+# NOTE: paid_claims, property_insurance_housing, property_insurance_commercial values are missing for fiscal_sem J-2012 through 2017
+
+#view(cvfs)
+```
+
+### Plots
+
+```{r private_bar_graph}
+data <- cvfs[-c(3,6,9,12,15,18,21,24,27,30), ] # exclude whole years
+
+# Convert 'fiscal_sem' column to character vector
+data$fiscal_sem <- as.character(data$fiscal_sem)
+
+# Reorder it back into a factor with the original levels
+data$fiscal_sem <- factor(data$fiscal_sem, levels = unique(data$fiscal_sem))
+
+# ggplot(data, aes(x=fiscal_sem, y=private)) +
+#   geom_line( color='blue', linewidth=0.5,  linetype=1, group=1) +
+#   theme(axis.text.x = element_text(angle = 45, vjust=0.5)) +
+#   ggtitle("Total Value of Private Construction Activity.") + 
+#   xlab("Fiscal semester") +
+#   ylab("Value of construction ($ in millions)") +
+#   theme(
+#   plot.title = element_text(size = 12, face = "bold.italic"),
+#   axis.title.x = element_text(size = 10, face = "bold"),
+#   axis.title.y = element_text( size = 10, face = "bold"))
+
+ggplot(data, aes(x=fiscal_sem, y=private, fill=(as.numeric(fiscal_sem) %% 2 == 0))) +
+  geom_bar(stat = "identity") +
+  scale_fill_discrete(labels=c('J-D (06-12)', 'E-J (01-06)'), name='Legend') +
+  theme(axis.text.x = element_text(angle = 45, vjust=0.5)) +
+  ggtitle("Total Value of Private Construction Activity in Puerto Rico") + 
+  xlab("Fiscal semester") +
+  ylab("Value of construction activity ($MM)") +
+  theme(
+  plot.title = element_text(size = 12, face = "bold.italic"),
+  axis.title.x = element_text(size = 10, face = "bold"),
+  axis.title.y = element_text( size = 10, face = "bold"))
+```
+
+```{r sector_pie_chart}
+data <- cvfs[c(3,6,9,12,15,18,21,24,27,30), -c(2, 3)] # whole years only
+data
+```
